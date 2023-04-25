@@ -293,15 +293,36 @@ def trade():
         # Your code here
         
         # 1. Check the signature
-        
+        sig = content['sig']
+        payload = content['payload']
+        platform = payload['platform']
+        if platform == 'Algorand':
+            if not verify_algo_signature(payload, sig, payload['sender_pk']):
+                log_message(content)
+                return jsonify(False)
+        elif platform == 'Ethereum':
+            if not verify_eth_signature(payload, sig, payload['sender_pk']):
+                log_message(content)
+                return jsonify(False)
+        else:
+            log_message(content)
+            return jsonify(False)       
         # 2. Add the order to the table
-        
+        order = Order(sender_pk=payload['sender_pk'], receiver_pk=payload['receiver_pk'],
+                      buy_currency=payload['buy_currency'], sell_currency=payload['sell_currency'],
+                      buy_amount=payload['buy_amount'], sell_amount=payload['sell_amount'], signature=sig)
+        g.session.add(order)
+        g.session.commit()        
         # 3a. Check if the order is backed by a transaction equal to the sell_amount (this is new)
-
+        tx_id = payload['tx_id']
+        sell_amount = int(payload['sell_amount'])
+        tx = get_tx(tx_id)
+        if tx['value'] != sell_amount:
+            return jsonify(False)
         # 3b. Fill the order (as in Exchange Server II) if the order is valid
-        
+        fill_order(order)
         # 4. Execute the transactions
-        
+        g.session.commit() 
         # If all goes well, return jsonify(True). else return jsonify(False)
         return jsonify(True)
 
@@ -309,8 +330,18 @@ def trade():
 def order_book():
     fields = [ "buy_currency", "sell_currency", "buy_amount", "sell_amount", "signature", "tx_id", "receiver_pk", "sender_pk" ]
     
-    # Same as before
-    pass
+    
+    result = []
+    for order in orders:
+        result.append({'sender_pk': order.sender_pk,
+                       'receiver_pk': order.receiver_pk,
+                       'buy_currency': order.buy_currency,
+                       'sell_currency': order.sell_currency,
+                       'buy_amount': order.buy_amount,
+                       'sell_amount': order.sell_amount,
+                       'signature': order.signature})
+
+    return jsonify({'data': result})
 
 if __name__ == '__main__':
     app.run(port='5002')
