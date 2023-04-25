@@ -242,6 +242,7 @@ def execute_txes(txes):
   
 @app.route('/address', methods=['POST'])
 def address():
+    print('Here')
     if request.method == "POST":
         content = request.get_json(silent=True)
         if 'platform' not in content.keys():
