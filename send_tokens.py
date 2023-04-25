@@ -12,12 +12,14 @@ def connect_to_algo(connection_type=''):
     if connection_type == "indexer":
         # TODO: return an instance of the v2client indexer. This is used for checking payments for tx_id's
         algod_address = "https://testnet-algorand.api.purestake.io/idx2"
+        algod_client = indexer.IndexerClient(algod_token, algod_address)
     else:
         # TODO: return an instance of the client for sending transactions
         # Tutorial Link: https://developer.algorand.org/tutorials/creating-python-transaction-purestake-api/
         algod_address = "https://testnet-algorand.api.purestake.io/ps2"
+        algod_client = algod.AlgodClient(algod_token, algod_address)
 
-    return None
+    return algod_client
 
 def send_tokens_algo( acl, sender_sk, txes):
     params = acl.suggested_params
@@ -30,28 +32,32 @@ def send_tokens_algo( acl, sender_sk, txes):
     #       - Sign the transaction
     
     # TODO: Return a list of transaction id's
+    # Adjust the first/last valid rounds in the suggested_params
+    params.first += 1000
+    params.last += 1000
 
     sender_pk = account.address_from_private_key(sender_sk)
 
     tx_ids = []
     for i,tx in enumerate(txes):
-        unsigned_tx = "Replace me with a transaction object"
-
+        unsigned_tx = transaction.PaymentTxn(sender_pk, params, tx['receiver_pk'], tx['amount'])
+        
         # TODO: Sign the transaction
-        signed_tx = "Replace me with a SignedTransaction object"
+        signed_tx = unsigned_tx.sign(sender_sk)
         
         try:
             print(f"Sending {tx['amount']} microalgo from {sender_pk} to {tx['receiver_pk']}" )
             
             # TODO: Send the transaction to the testnet
             
-            tx_id = "Replace me with the tx_id"
+            tx_id = acl.send_transaction(signed_tx)
+            tx_ids.append(tx_id)
             txinfo = wait_for_confirmation_algo(acl, txid=tx_id )
             print(f"Sent {tx['amount']} microalgo in transaction: {tx_id}\n" )
         except Exception as e:
             print(e)
 
-    return []
+    return tx_ids
 
 # Function from Algorand Inc.
 def wait_for_confirmation_algo(client, txid):
@@ -116,8 +122,26 @@ def send_tokens_eth(w3,sender_sk,txes):
     # Make sure you track the nonce -locally-
     
     tx_ids = []
-    for i,tx in enumerate(txes):
-        # Your code here
-        continue
+    for i, tx in enumerate(txes):
+        # Set the transaction parameters
+        tx_params = {
+            'nonce': nonce + i,
+            'to': tx['receiver_pk'],
+            'value': tx['amount'],
+            'gas': 21000,
+            'gasPrice': w3.eth.gas_price,
+        }
+
+        # Sign the transaction
+        signed_txn = w3.eth.account.sign_transaction(tx_params, sender_sk)
+
+        # Send the transaction to the Ethereum blockchain
+        tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        tx_ids.append(tx_hash)
+
+        # Wait for the transaction to be confirmed
+        receipt = wait_for_confirmation_eth(w3, tx_hash)
+        print(f"Sent {w3.fromWei(tx['amount'], 'ether')} ETH from {sender_pk} to {tx['receiver_pk']} in transaction {receipt['transactionHash'].hex()}")
+
 
     return tx_ids
